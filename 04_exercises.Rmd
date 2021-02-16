@@ -1,6 +1,6 @@
 ---
 title: 'Weekly Exercises #4'
-author: "Put your name here"
+author: "Katie Herrick"
 output: 
   html_document:
     keep_md: TRUE
@@ -8,6 +8,7 @@ output:
     toc_float: TRUE
     df_print: paged
     code_download: true
+    code_folding: hide
 ---
 
 
@@ -28,7 +29,6 @@ library(sf)            # for working with spatial data
 library(leaflet)       # for highly customizable mapping
 library(carData)       # for Minneapolis police stops data
 library(ggthemes)      # for more themes (including theme_map())
-theme_set(theme_minimal())
 ```
 
 ```{r data}
@@ -94,15 +94,93 @@ These exercises will reiterate what you learned in the "Mapping data with R" tut
 
 ### Starbucks locations (`ggmap`)
 
-  1. Add the `Starbucks` locations to a world map. Add an aesthetic to the world map that sets the color of the points according to the ownership type. What, if anything, can you deduce from this visualization?  
+  1. Add the `Starbucks` locations to a world map. Add an aesthetic to the world map that sets the color of the points according to the ownership type. What, if anything, can you deduce from this visualization? 
+  
+```{r}
+world<-
+  get_stamenmap(bbox=c(left=-175, bottom=-75, right=175, top=75.5),
+                maptype="terrain",
+                zoom=2)
+Starbucks2<-
+Starbucks %>% 
+  dplyr::rename_all(funs(make.names(.))) 
+ggmap(world)+
+  geom_point(data=Starbucks2,
+             aes(x=Longitude, y=Latitude, color=Ownership.Type),
+             alpha=0.5,
+             size=0.75)+
+  theme_map()+
+  theme(legend.background = element_blank())
+```
+  
+The vast majority of Starbucks locations around the world are either company-owned or licensed. Interestingly, however, in Japan and Korea the Starbucks are overwhelmingly joint ventures. Though I'm not entirely sure what that means, my guess is that Starbucks has an agreement with an East Asian coffee chain and they partner operate their stores. This probably gives Starbucks a big leg up in that part of the world, though I do wonder why that arrangement doesn't seem common elsewhere. I was also surprised by the utter lack of Starbucks stores in Africa, most of Australia, and Brazil. Is it because of a lack of demand in those regions? Government regulations? Poor return on investment? This also surprises me, because I would expect each of those regions to be fairly large coffee bean producers. Is there a reason Starbucks wouldn't put its stores in the same region as its plantations? This map gives you lots of plot points to visualize the distribution of Starbucks stores, but not really any other information to explain that distribution.
+  
 
-  2. Construct a new map of Starbucks locations in the Twin Cities metro area (approximately the 5 county metro area).  
+  2. Construct a new map of Starbucks locations in the Twin Cities metro area (approximately the 5 county metro area).
+  
+```{r}
+tc_metro<-
+  get_stamenmap(bbox=c(left=-93.9, bottom=44.7, right=-92.6, top=45.2),
+                maptype="terrain",
+                zoom=9)
 
-  3. In the Twin Cities plot, play with the zoom number. What does it do?  (just describe what it does - don't actually include more than one map).  
+tc_starbucks<-
+Starbucks2 %>% 
+  filter(Country=="US",
+         State.Province=="MN")
+ggmap(tc_metro)+
+  geom_point(data=tc_starbucks,
+             aes(x=Longitude, y=Latitude),
+             alpha=0.5,
+             size=1.5, 
+             color="blue")+
+  theme_map()
+```
+  
+
+  3. In the Twin Cities plot, play with the zoom number. What does it do?  (just describe what it does - don't actually include more than one map).
+  
+The Zoom number changes the level of detail the map shows. The smaller the number, the more zoomed out (less detail) there is. At first I started with a zoom of 0.75, as I did with the world map. However, that is waaaaaaaay too zoomed out for a map of the metro area; it wasn't even recognizable as a map! However, if I made the zoom too large of a number then everything began looking very pixelated, and took an extremely long time to load.
 
   4. Try a couple different map types (see `get_stamenmap()` in help and look at `maptype`). Include a map with one of the other map types.  
+  
+```{r}
+tc_metro<-
+  get_stamenmap(bbox=c(left=-93.9, bottom=44.7, right=-92.6, top=45.2),
+                maptype="toner-lite",
+                zoom=9)
+
+tc_starbucks<-
+Starbucks2 %>% 
+  filter(Country=="US",
+         State.Province=="MN")
+ggmap(tc_metro)+
+  geom_point(data=tc_starbucks,
+             aes(x=Longitude, y=Latitude),
+             alpha=0.5,
+             size=1.5, 
+             color="blue")+
+  theme_map()
+```
+
 
   5. Add a point to the map that indicates Macalester College and label it appropriately. There are many ways you can do think, but I think it's easiest with the `annotate()` function (see `ggplot2` cheatsheet).
+  
+```{r}
+tc_metro<-
+  get_stamenmap(bbox=c(left=-93.9, bottom=44.7, right=-92.6, top=45.2),
+                maptype="terrain",
+                zoom=9)
+ggmap(tc_metro)+
+  geom_point(data=tc_starbucks,
+             aes(x=Longitude, y=Latitude),
+             alpha=0.5,
+             size=1.5, 
+             color="blue")+
+  annotate("text", x=-93.1, y=44.938, label="Macalester College", color="orange", size=3)+
+  theme_map()
+```
+
 
 ### Choropleth maps with Starbucks data (`geom_map()`)
 
@@ -122,12 +200,48 @@ starbucks_with_2018_pop_est <-
 ```
 
   6. **`dplyr` review**: Look through the code above and describe what each line of code does.
+  
+The first line prints/names a new dataset (called census_pop_est_2018) for the manipulations made to the csv file over the next couple lines. Next, the 2018 census estimate is read into the code, and the "state" column is split into separate columns for the period in front of each state name, and the state name itself. The new column with just the dots in it is then deselected, leaving us a variable with values that are just regular state names. Then, a new column is created with all of those same state names, but shifted to entirely lower case. This is so we can join it with the starbucks data (that dataframe has state names in lower case, and joining requires them to be exactly the same.) 
+
+The starbucks by state dataset is piped in and joined with our newly modified census dataset. They are joined by their mutual variable, and we tell R that the "state" variable in the census dataset is the same as "state_name" in the starbucks dataset. We joined it in such a way that all the cases from the starbucks set are retained, while we discard those from the census dataset that do not have a match in starbucks. Finally, we create a new column that takes the number of starbucks in each state ("n") divided by the variable from the census dataset that tells us the 2018 population (est_pop_2018). By itself, this would give us the number of Starbucks per capita, but then it is multiplied by 10,000 to give us the number of Starbucks per 10,000 people in each state. We call the new dataset with this variable "starbucks_with_2018_pop_est".
 
   7. Create a choropleth map that shows the number of Starbucks per 10,000 people on a map of the US. Use a new fill color, add points for all Starbucks in the US (except Hawaii and Alaska), add an informative title for the plot, and include a caption that says who created the plot (you!). Make a conclusion about what you observe.
+  
+```{r}
+us_map <- map_data("state")
+
+us_starbucks<-
+  Starbucks2 %>% 
+  filter(Country=="US")
+
+us_starbucks_points<-
+starbucks_with_2018_pop_est %>%
+  left_join(us_starbucks,
+            by=c("State/Province"="State.Province")) %>% 
+  filter(!state_name%in%c("alaska", "hawaii"))
+
+us_starbucks_points %>% 
+  rename(region=state_name) %>% 
+ggplot()+
+  geom_map(map=us_map,
+           aes(map_id=region,
+               fill=starbucks_per_10000))+
+  expand_limits(x=us_map$long, y=us_map$lat)+
+  theme_map()+
+  scale_fill_viridis_c(option="inferno")+
+  geom_point(data=us_starbucks_points,
+             aes(x=Longitude, y=Latitude),
+             size=1)+
+  theme(legend.background = element_blank())+
+  labs(title="Starbucks per 10,000 People",
+       caption="Katie Herrick")
+```
+
 
 ### A few of your favorite things (`leaflet`)
 
   8. In this exercise, you are going to create a single map of some of your favorite places! The end result will be one map that satisfies the criteria below. 
+
 
   * Create a data set using the `tibble()` function that has 10-15 rows of your favorite places. The columns will be the name of the location, the latitude, the longitude, and a column that indicates if it is in your top 3 favorite locations or not. For an example of how to use `tibble()`, look at the `favorite_stp_by_lisa` I created in the data R code chunk at the beginning.  
 
@@ -136,6 +250,29 @@ starbucks_with_2018_pop_est <-
   * Connect all your locations together with a line in a meaningful way (you may need to order them differently in the original data).  
   
   * If there are other variables you want to add that could enhance your plot, do that now.  
+  
+  
+```{r}
+my_favorite_places<-
+  tibble(place=c("Grammy and Grampa's", "Nana's Cabin", "Science Museum", "Bass Lake", "Interstate Park", "Cafe Astoria", "Minnehaha Falls", "The Strand", "Pick-a-Bagel", "The Wharf", "Hirshhorn Museum", "Meridian Park"),
+         long=c(-117.1, -94.6, -93.09813, -92.7, -92.7, -93.10764, -93.21117, -73.99, -73.984, -77.02, -77.022, -77.036),
+         lat=c(32.8, 46.2, 44.94278, 45.6, 45.4, 44.94136, 44.91621, 40.733, 40.765, 38.88, 38.89, 38.921),
+         top3=c(FALSE, TRUE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE))
+
+color <- colorNumeric(palette=c("cornflowerblue", "darkgoldenrod1"), 
+                     domain = my_favorite_places$top3)
+
+leaflet(my_favorite_places) %>% 
+  addTiles() %>% 
+  addCircles(label = ~place,
+             color = ~color(top3)) %>% 
+  addLegend("topleft", colors="darkgoldenrod1", values = ~top3, bins=1, labels="Top 3 Favorite Places") %>% 
+  addPolylines(lng=c(-117.1, -94.6, -93.09813, -92.7, -92.7, -93.10764, -93.21117, -73.99, -73.984, -77.02, -77.022, -77.036),
+               lat=c(32.8, 46.2, 44.94278, 45.6, 45.4, 44.94136, 44.91621, 40.733, 40.765, 38.88, 38.89, 38.921),
+               color="gray", weight=2)
+```
+
+As I was compiling my list of 12 favorite places, I realized they really span the whole country! Zoom in on the Twin Cities region, New York, and Washington, DC to view all the places more clearly. The points are connected in the chronological order in which I first visited them, starting with my grandparents' house in San Diego.
   
 ## Revisiting old datasets
 
@@ -162,7 +299,24 @@ Stations<-read_csv("http://www.macalester.edu/~dshuman1/data/112/DC-Stations.csv
   9. Use the latitude and longitude variables in `Stations` to make a visualization of the total number of departures from each station in the `Trips` data. Use either color or size to show the variation in number of departures. This time, plot the points on top of a map. Use any of the mapping tools you'd like.
   
 ```{r}
+trips_and_stations<-
+Trips %>% 
+  group_by(sstation) %>% 
+  summarize(n_departures = n()) %>% 
+  arrange(desc(n_departures)) %>% 
+  left_join(Stations, 
+            by = c("sstation"="name"))
 
+color <- colorBin(palette="Spectral", 
+                     domain = trips_and_stations$n_departures,
+                  bins=6)
+
+leaflet(trips_and_stations) %>% 
+  addTiles() %>% 
+  addCircles(label = ~sstation,
+             color = ~color(n_departures),
+             opacity=1) %>% 
+  addLegend("topleft", values = ~n_departures, pal=color, bins=6, title="Number of Station Departures")
 ```
   
   10. Only 14.4% of the trips in our data are carried out by casual users. Create a plot that shows which area(s) have stations with a much higher percentage of departures by casual users. What patterns do you notice? Also plot this on top of a map. I think it will be more clear what the patterns are.
