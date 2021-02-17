@@ -12,8 +12,8 @@ output:
 ---
 
 
-```{r setup, include=FALSE}
-#knitr::opts_chunk$set(echo = TRUE, error=TRUE, message=FALSE, warning=FALSE)
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE, error=FALSE, message=FALSE, warning=FALSE)
 ```
 
 ```{r libraries}
@@ -237,6 +237,7 @@ ggplot()+
        caption="Katie Herrick")
 ```
 
+Starbucks is *way* more common on the West Coast than anywhere else in the country. I expected there to be a lot of them in Washington state because that is where the company started, but I had no idea they were more common in Colorado, for example, than New York. I'm also surprised by how few Starbucks there are in the Deep South. Is there a different ubiquitous coffee chain in that region? It is also crazy how comparatively few Starbucks per capita there are in Minnesota. I feel like there is one on every corner...where would we fit more of them??
 
 ### A few of your favorite things (`leaflet`)
 
@@ -322,41 +323,237 @@ leaflet(trips_and_stations) %>%
   10. Only 14.4% of the trips in our data are carried out by casual users. Create a plot that shows which area(s) have stations with a much higher percentage of departures by casual users. What patterns do you notice? Also plot this on top of a map. I think it will be more clear what the patterns are.
   
 ```{r}
+bike_clients<-
+Trips %>% 
+  mutate(casual=client=="Casual") %>% 
+  group_by(sstation) %>% 
+  summarize(n_casual=sum(casual==1),
+            n_registered=sum(casual==0),
+            prop_casual=n_casual/sum(n_casual, n_registered)) %>%
+  arrange(desc(prop_casual)) %>% 
+  left_join(Stations, 
+            by = c("sstation"="name"))
 
+color <- colorBin(palette="Spectral", 
+                     domain = bike_clients$prop_casual,
+                  bins=6)
+
+leaflet(bike_clients) %>% 
+  addTiles() %>% 
+  addCircles(label = ~sstation,
+             color = ~color(prop_casual),
+             opacity=1) %>% 
+  addLegend("topleft", values = ~prop_casual, pal=color, bins=6, title="Proportion of Casual Bikeshare Users")
 ```
-  
+
+
+The patterns of registered vs casual bicyclists is much clearer now that we have a map and familiar landmarks to look at! There are a few stations with unusually high rates of casual use: one is right by the Lincoln Memorial, one near the Martin Luther King, Jr. memorial at the Tidal Basin, one near the Capitol building, and a fourth near several of the Smithsonians. All of these sites are extremely popular with tourists, suggesting that many of the bikes at these stations are used by visitors to the city who want to go sight-seeing.
+
 ### COVID-19 data
 
 The following exercises will use the COVID-19 data from the NYT.
 
   11. Create a map that colors the states by the most recent cumulative number of COVID-19 cases (remember, these data report cumulative numbers so you don't need to compute that). Describe what you see. What is the problem with this map?
   
+```{r}
+us_map<-
+map_data("state")
+
+covid19_2<-
+covid19 %>%
+  mutate(region=tolower(state)) %>% 
+  filter(date=="2021-02-13")
+
+covid19_2 %>% 
+  ggplot() +
+  geom_map(map = us_map,
+           aes(map_id = region,
+               fill = cases)) +
+  expand_limits(x = us_map$long, y = us_map$lat) +
+  theme_map()
+```
+
+The biggest issue with this map is that it does not take state populations into account. Therefore, the viewer's attention is drawn disproportionately to heavily populated states such as California and Texas, which naturally have a larger absolute number of COVID cases simply due to the fact that they have a larger number of people. States such as South Dakota or Wyoming will likely be misrepresented; they have had large COVID outbreaks, but they don't register because of their smaller populations. A better visualization of the pandemic would look at the cases per capita, or some other proportion like that.
+
   12. Now add the population of each state to the dataset and color the states by most recent cumulative cases/10,000 people. See the code for doing this with the Starbucks data. You will need to make some modifications. 
   
+```{r}
+covid19_and_pop<-
+  covid19_2 %>% 
+  left_join(census_pop_est_2018,
+            by=c("region"="state"))
+
+covid19_and_pop %>%
+  rename(population=est_pop_2018) %>% 
+  ggplot() +
+  geom_map(map = us_map,
+           aes(map_id = region,
+               fill = cases/population*10000)) +
+  expand_limits(x = us_map$long, y = us_map$lat) +
+  theme_map()
+```
+
   13. **CHALLENGE** Choose 4 dates spread over the time period of the data and create the same map as in exercise 12 for each of the dates. Display the four graphs together using faceting. What do you notice?
   
+```{r}
+covid19_3<-
+covid19 %>%
+  mutate(region=tolower(state)) %>%
+  filter(date=="2021-02-13"|
+         date=="2020-10-01"|
+         date=="2020-07-01"|
+         date=="2020-03-15")
+
+covid19_and_pop2<-
+  covid19_3 %>% 
+  left_join(census_pop_est_2018,
+            by=c("region"="state"))
+
+covid19_and_pop2 %>%
+  rename(population=est_pop_2018) %>% 
+  ggplot() +
+  geom_map(map = us_map,
+           aes(map_id = region,
+               fill = cases/population*10000)) +
+  expand_limits(x = us_map$long, y = us_map$lat) +
+  theme_map()+
+  theme(legend.position = "bottom")+
+  facet_wrap(vars(date), scales="free")
+```
+  
+I didn't realize how much the pandemic really advanced in the beginning of this year. I remember feeling like the situation was dire back in March/April, but compared to now the virus was positively under control. This graph also shows that the far Northwest and Northeast are doing much better in their COVID management than the rest of the nation; I wonder if there are best practices that could be shared.
+
+*Katie's Notes: Is there a way to change the number of bins in the color gradient? It's almost impossible to see any variation between per capita cases in the first two dates I chose, but I couldn't figure out how to fix that.*
+
 ## Minneapolis police stops
 
 These exercises use the datasets `MplsStops` and `MplsDemo` from the `carData` library. Search for them in Help to find out more information.
 
   14. Use the `MplsStops` dataset to find out how many stops there were for each neighborhood and the proportion of stops that were for a suspicious vehicle or person. Sort the results from most to least number of stops. Save this as a dataset called `mpls_suspicious` and display the table.  
   
-  15. Use a `leaflet` map and the `MplsStops` dataset to display each of the stops on a map as a small point. Color the points differently depending on whether they were for suspicious vehicle/person or a traffic stop (the `problem` variable). HINTS: use `addCircleMarkers`, set `stroke = FAlSE`, use `colorFactor()` to create a palette.  
+```{r}
+
+mpls_suspicious<-
+MplsStops %>% 
+  group_by(neighborhood) %>% 
+  mutate(suspicious=problem=="suspicious") %>% 
+  summarize(n_stops=n(),
+            n_suspicious=sum(suspicious==1),
+            prop_suspicious=n_suspicious/n_stops) %>% 
+  arrange(desc(n_stops))
+
+mpls_suspicious2<-
+  mpls_suspicious %>% 
+  left_join(MplsStops,
+            by="neighborhood")
+  
+```
+
+  
+  15. Use a `leaflet` map and the `MplsStops` dataset to display each of the stops on a map as a small point. Color the points differently depending on whether they were for suspicious vehicle/person or a traffic stop (the `problem` variable). HINTS: use `addCircleMarkers`, set `stroke = FAlSE`, use `colorFactor()` to create a palette. 
+  
+```{r}
+pal <- colorFactor(palette=c("cornflowerblue", "darkgoldenrod1"),
+                    domain=MplsStops$problem)
+
+leaflet(MplsStops) %>% 
+  addTiles() %>% 
+  addCircles(lng = ~long,
+             lat = ~lat,
+             radius = 3,
+             color = ~pal(problem),
+             stroke=FALSE, 
+             label= ~problem) %>% 
+  addLegend("topleft", colors="cornflowerblue", values = ~problem, bins=1, labels="Suspicious Stops")
+  
+```
+
   
   16. Save the folder from moodle called Minneapolis_Neighborhoods into your project/repository folder for this assignment. Make sure the folder is called Minneapolis_Neighborhoods. Use the code below to read in the data and make sure to **delete the `eval=FALSE`**. Although it looks like it only links to the .sph file, you need the entire folder of files to create the `mpls_nbhd` data set. These data contain information about the geometries of the Minneapolis neighborhoods. Using the `mpls_nbhd` dataset as the base file, join the `mpls_suspicious` and `MplsDemo` datasets to it by neighborhood (careful, they are named different things in the different files). Call this new dataset `mpls_all`.
 
-```{r, eval=FALSE}
+```{r}
 mpls_nbhd <- st_read("Minneapolis_Neighborhoods/Minneapolis_Neighborhoods.shp", quiet = TRUE)
+```
+
+```{r}
+mpls_nbhd2<-
+mpls_nbhd %>% 
+  left_join(mpls_suspicious2,
+            by=c("BDNAME"="neighborhood"))
+
+mpls_all <- 
+  mpls_nbhd2 %>% 
+  left_join(MplsDemo,
+            by=c("BDNAME"="neighborhood"))
 ```
 
   17. Use `leaflet` to create a map from the `mpls_all` data  that colors the neighborhoods by `prop_suspicious`. Display the neighborhood name as you scroll over it. Describe what you observe in the map.
   
+```{r}
+color <- colorBin(palette="Spectral", 
+                     domain = mpls_all$prop_suspicious,
+                  bins=6)
+
+leaflet(mpls_all) %>% 
+  addTiles() %>% 
+  addCircles(lng = ~long,
+             lat = ~lat,
+             radius = 3,
+             stroke=FALSE, 
+             label = ~BDNAME,
+             color = ~color(prop_suspicious),
+             opacity=1) %>% 
+  addLegend("topleft", values = ~prop_suspicious, pal=color, bins=6, title="Proportion of 'Suspicious' Police Stops")
+```
+
+Unsurprisingly, the neighborhoods with the most "suspicious" police stops are also those that are lower-income and have larger populations of color. These include downtown Minneapolis, Powderhorn Park, Corcoran, Seward, Phillips, and Camden. Conversely, the neighborhoods with the lowest proportion of "suspicious" stops are higher-income, higher educated, and whiter. For example, the Nicollet Island area is nearly 80% white, over 70% of residents have a college degree, and the median income is more than $80,000; the proportion of suspicious police stops there was just over 17%. This sort of profiling has created a huge lack of trust between culturally diverse neighborhoods and the city, ultimately making everybody less safe and sowing seeds of prejudice.
+  
   18. Use `leaflet` to create a map of your own choosing. Come up with a question you want to try to answer and use the map to help answer that question. Describe what your map shows. 
   
+**Question:** Are people of color disproportionately targeted by traffic stops in Minneapolis?
+  
+```{r}
+traffic_stops<-
+MplsStops %>% 
+  filter(race!="NA",
+         problem=="traffic") %>% 
+  mutate(POC_stop=race!="White") %>%
+  group_by(neighborhood) %>%
+  summarize(n_stops=n(),
+            n_POC_stops=sum(POC_stop==1), 
+            prop_POC_stops=n_POC_stops/n_stops)
+
+Mpls_traffic_stops<-
+mpls_all %>% 
+  left_join(traffic_stops,
+            by=c("BDNAME"="neighborhood")) %>% 
+  mutate(prop_neighborhood_POC=1-white)
+
+
+pal <- colorBin(palette=c("Spectral"),
+                    domain=Mpls_traffic_stops$prop_POC_stops,
+                   bins=6)
+
+leaflet(Mpls_traffic_stops) %>% 
+  addTiles() %>% 
+  addCircles(lng = ~long,
+             lat = ~lat,
+             radius = 3,
+             stroke=FALSE, 
+             label = ~prop_neighborhood_POC,
+             color = ~pal(prop_POC_stops),
+             opacity=1) %>% 
+  addLegend("topleft", values = ~prop_POC_stops, pal=color, bins=6, title="Proportion of Traffic Stops Targeting People of Color")
+```
+
+This map is colored by the proportion of Minneapolis traffic stops that pulled over a person of color. You can scroll over an area of a map to see what percentage of the population are people of color. Unfortunately and unsurprisingly, people of color seem to be extremely disproportionately targeted by traffic stops. In many places, the percentage of traffic stops they account for is around 20% higher than their percentage of the population. In fact, some areas of North Minneapolis are approximately 34-40% POC, but they account for more than 90% of the traffic stops. 
+
+*Katie's Notes: Is there any way to add multiple variables to a label? I really wanted to include the neighborhoods in the label as well, but couldn't figure out how to show it alongside the proportion of POCs. That's not a huge deal if you're familiar with the geography/demographics of Minneapolis, but would definitely make the map more accessible.*
   
 ## GitHub link
 
   19. Below, provide a link to your GitHub page with this set of Weekly Exercises. Specifically, if the name of the file is 04_exercises.Rmd, provide a link to the 04_exercises.md file, which is the one that will be most readable on GitHub.
+
 
 
 **DID YOU REMEMBER TO UNCOMMENT THE OPTIONS AT THE TOP?**
